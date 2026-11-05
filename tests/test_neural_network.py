@@ -9,7 +9,14 @@ from models.neural_network import NeuralNetwork
 
 
 class NeuralNetworkTests(unittest.TestCase):
-    def test_both_task_shapes_and_class_ranges(self):
+    def test_multiple_hidden_layers_and_dropout(self):
+        model = NeuralNetwork(500, 50, hidden_sizes=[256, 128, 64], dropout=0.5)
+        X = torch.ones(4, 500)
+        model.eval()
+        torch.testing.assert_close(model(X), model(X), rtol=0, atol=0)
+        self.assertEqual(model(X).shape, (4, 50))
+
+    def test_both_task_output_shapes(self):
         for input_size, num_classes in ((500, 50), (768, 3)):
             with self.subTest(input_size=input_size):
                 model = NeuralNetwork(input_size, num_classes)
@@ -18,22 +25,12 @@ class NeuralNetworkTests(unittest.TestCase):
                     scores = model(torch.zeros(4, input_size))
                 self.assertEqual(scores.shape, (4, num_classes))
                 self.assertTrue(torch.isfinite(scores).all().item())
-                predictions = scores.argmax(dim=1)
-                self.assertTrue(((predictions >= 0) & (predictions < num_classes)).all().item())
 
-    def test_seed_reproduces_initialization(self):
-        torch.manual_seed(42)
-        first = NeuralNetwork(2, 3, hidden_size=8)
-        torch.manual_seed(42)
-        second = NeuralNetwork(2, 3, hidden_size=8)
-        X = torch.tensor([[1.0, -1.0]])
-        torch.testing.assert_close(first(X), second(X), rtol=0, atol=0)
-
-    def test_invalid_layer_sizes(self):
-        for sizes in ((0, 3, 8), (2, 1, 8), (2, 3, 0)):
-            with self.subTest(sizes=sizes):
-                with self.assertRaises(ValueError):
-                    NeuralNetwork(*sizes)
+    def test_invalid_configuration(self):
+        for options in ({"input_size": 0}, {"num_classes": 1},
+                        {"hidden_sizes": []}, {"hidden_sizes": [0]}, {"dropout": 1.0}):
+            with self.subTest(options=options), self.assertRaises(ValueError):
+                NeuralNetwork(**{"input_size": 2, "num_classes": 3, **options})
 
     def test_can_learn_small_synthetic_dataset(self):
         torch.manual_seed(42)

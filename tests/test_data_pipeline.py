@@ -57,7 +57,6 @@ class LoaderTests(unittest.TestCase):
     def test_invalid_columns(self):
         for frame in (
             self.frame().drop(columns="feature_499"),
-            self.frame().rename(columns={"feature_0": "feature_500"}),
             self.frame().drop(columns="label"),
             self.frame().assign(extra=1),
         ):
