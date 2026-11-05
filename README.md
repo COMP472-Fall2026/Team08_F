@@ -60,3 +60,33 @@ The datasets are available through the [COMP 472 Kaggle Competition](https://www
 ## Report and Presentation
 
 The report and presentation will be maintained as shared Microsoft Word and PowerPoint files.
+
+## Shared data pipeline
+
+Place the Kaggle CSVs in `data/` and install the dependencies in `requirements.txt`.
+Run from the repository root:
+
+```python
+from utils.data_loader import load_dataset
+from utils.preprocessing import split_dataset, standardize_split
+
+data = load_dataset("image")  # Use "sentiment" for the other task
+split = split_dataset(data)   # Stratified 80/20 split, seed 42
+
+# Optional scaling, fitted only on training features
+scaled, scaler = standardize_split(split)
+X_train, y_train = scaled.train.X, scaled.train.y
+X_val, y_val = scaled.validation.X, scaled.validation.y
+```
+
+All classifiers should use the same split defaults and dataset. IDs are preserved
+in `.ids` for matching predictions to samples. Load hidden test data with
+`load_dataset("image", "test")` and apply the fitted scaler with
+`scaler.transform(test.X)`, where `test` is the loaded test dataset. Repeat
+separately for sentiment, using its own scaler.
+
+Run the tests:
+
+```bash
+python -m unittest discover -s tests -v
+```
