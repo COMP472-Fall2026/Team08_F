@@ -4,13 +4,14 @@ from torch import Tensor, nn
 
 
 class NeuralNetwork(nn.Module):
-    """Configurable hidden layers with ReLU, followed by one score per class.
+    """Configurable hidden layers and activation, followed by one score per class.
 
     Create separate models for the two tasks:
         image_model = NeuralNetwork(input_size=500, num_classes=50)
         sentiment_model = NeuralNetwork(input_size=768, num_classes=3)
 
     hidden_sizes=[256] is the baseline; try [256, 128] for two hidden layers.
+    ReLU is the default; activation="GELU" selects a smooth alternative.
     hidden_size is retained for compatibility with the original single layer.
     Set torch.manual_seed(42) before construction for repeatable initialization.
     Training and preprocessing belong in the experiment script.
@@ -19,6 +20,7 @@ class NeuralNetwork(nn.Module):
     def __init__(
         self, input_size: int, num_classes: int, hidden_size: int = 256,
         *, hidden_sizes: list[int] | None = None, dropout: float = 0.0,
+        activation: str = "ReLU",
     ) -> None:
         super().__init__()
         sizes = [hidden_size] if hidden_sizes is None else list(hidden_sizes)
@@ -29,11 +31,15 @@ class NeuralNetwork(nn.Module):
 
         if not 0 <= dropout < 1:
             raise ValueError("dropout must be between 0 (inclusive) and 1 (exclusive).")
+        activation_class = {"relu": nn.ReLU, "gelu": nn.GELU}.get(activation.lower())
+        if activation_class is None:
+            raise ValueError("activation must be ReLU or GELU.")
+        self.activation_name = activation_class.__name__
 
         layers = []
         previous_size = input_size
         for size in sizes:
-            layers.extend([nn.Linear(previous_size, size), nn.ReLU()])
+            layers.extend([nn.Linear(previous_size, size), activation_class()])
             # Dropout randomly disables hidden activations during training only.
             if dropout > 0:
                 layers.append(nn.Dropout(dropout))

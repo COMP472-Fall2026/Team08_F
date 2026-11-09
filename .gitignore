@@ -34,3 +34,6 @@ submissions/
 
 # VS Code temporary files
 tempCodeRunnerFile.py
+
+# Generated experiment results
+results/neural_network/

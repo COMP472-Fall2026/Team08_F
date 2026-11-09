@@ -24,6 +24,7 @@ BASELINE = {
     "hidden_sizes": [256], "learning_rate": 0.001, "batch_size": 64,
     "dropout": 0.0, "weight_decay": 0.0, "max_epochs": 50,
     "patience": 10, "seed": 42, "preprocessing": "standardized",
+    "activation": "ReLU",
 }
 # Each preset changes only the stated baseline setting; no automatic grid runs.
 PRESETS = {
@@ -128,6 +129,7 @@ def run_experiment(
     val_loader = DataLoader(val_data, batch_size=config["batch_size"])
     model = NeuralNetwork(
         input_size, num_classes, hidden_sizes=config["hidden_sizes"], dropout=config["dropout"],
+        activation=config["activation"],
     )
     optimizer = torch.optim.Adam(
         model.parameters(), lr=config["learning_rate"], weight_decay=config["weight_decay"],
@@ -142,7 +144,7 @@ def run_experiment(
     checkpoint_path = checkpoint_dir / f"{run_id}.pt"
     metadata = {
         **config, "dataset": dataset, "run_id": run_id, "device": "cpu",
-        "split_seed": 42, "validation_size": 0.2, "activation": "ReLU", "optimizer": "Adam",
+        "split_seed": 42, "validation_size": 0.2, "activation": model.activation_name, "optimizer": "Adam",
         "selection_rule": "highest validation accuracy; earliest epoch wins ties",
         "versions": {"python": platform.python_version(), "torch": str(torch.__version__),
                      "numpy": np.__version__, "pandas": pd.__version__, "sklearn": sklearn.__version__},
@@ -199,7 +201,7 @@ def run_experiment(
     )}
     summary.update(
         run_id=run_id, dataset=dataset, hidden_sizes=json.dumps(config["hidden_sizes"]),
-        activation="ReLU", optimizer="Adam", epochs_trained=epoch, best_epoch=best_epoch,
+        activation=model.activation_name, optimizer="Adam", epochs_trained=epoch, best_epoch=best_epoch,
         train_accuracy=train_metrics["accuracy"], val_accuracy=val_metrics["accuracy"],
         train_loss=train_metrics["loss"], val_loss=val_metrics["loss"],
         training_time_seconds=training_time,
@@ -215,6 +217,7 @@ def main():
     parser.add_argument("--dataset", choices=DATASET_SPECS, required=True)
     parser.add_argument("--preset", choices=PRESETS, default="baseline")
     parser.add_argument("--hidden-sizes", type=int, nargs="+")
+    parser.add_argument("--activation", type=str.lower, choices=("relu", "gelu"))
     for name, value_type in (("learning_rate", float), ("weight_decay", float), ("dropout", float),
                              ("batch_size", int), ("max_epochs", int), ("patience", int), ("seed", int)):
         parser.add_argument("--" + name.replace("_", "-"), type=value_type)

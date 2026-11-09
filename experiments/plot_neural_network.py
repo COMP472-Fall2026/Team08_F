@@ -108,7 +108,7 @@ def main():
     selection = parser.add_mutually_exclusive_group(required=True)
     selection.add_argument("--run-id")
     selection.add_argument("--compare", choices=("learning_rate", "hidden_sizes", "dropout",
-                                                "weight_decay", "batch_size", "preprocessing"))
+                                                "weight_decay", "batch_size", "preprocessing", "activation"))
     parser.add_argument("--dataset", choices=("image", "sentiment"))
     parser.add_argument("--run-ids", nargs="+")
     args = parser.parse_args()

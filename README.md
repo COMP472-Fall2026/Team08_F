@@ -40,7 +40,6 @@ COMP472-Project-Fall2026/
 ├── tests/           # Algorithm and integration tests
 ├── data/            # Local Kaggle datasets (not tracked)
 ├── submissions/     # Kaggle prediction files (not tracked)
-├── submission.py    # Final prediction generation
 ├── requirements.txt
 └── README.m
 ```
@@ -111,6 +110,8 @@ python -m experiments.train_neural_network --dataset image --hidden-sizes 256 12
 ```
 
 Use `--help` to see all presets and options. Run experiments one at a time.
+ReLU remains the default activation; use `--activation gelu` to compare GELU.
+Activation is recorded with the other experiment settings.
 
 Each run saves under `results/neural_network/`:
 

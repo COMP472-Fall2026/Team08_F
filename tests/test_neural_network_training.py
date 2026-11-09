@@ -138,13 +138,15 @@ class TrainingTests(unittest.TestCase):
         rng = np.random.default_rng(8)
         data = Dataset(rng.normal(size=(30, 768)).astype(np.float32),
                        self.data.y, self.data.ids)
-        summary = run_experiment("sentiment", experiment_config(
-            hidden_sizes=[8], max_epochs=1, preprocessing="none", dropout=0.2,
-        ), data=data, results_dir=self.root)
+        config = experiment_config(hidden_sizes=[8], max_epochs=1, preprocessing="none", dropout=0.2)
+        summary = run_experiment("sentiment", config, data=data, results_dir=self.root)
         checkpoint = torch.load(self.root / "checkpoints" / f"{summary['run_id']}.pt", weights_only=True)
         self.assertIsNone(checkpoint["scaler_mean"])
         self.assertIsNone(checkpoint["scaler_scale"])
         self.assertEqual(summary["epochs_trained"], 1)
+        # Saved settings should match the run, regardless of the selected configuration.
+        for key, value in config.items():
+            self.assertEqual(checkpoint["config"][key], value)
 
     def test_basic_invalid_training_options(self):
         for changes in ({"max_epochs": 0}, {"patience": 0}, {"learning_rate": -1},
