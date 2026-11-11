@@ -128,7 +128,8 @@ python -m experiments.train_neural_network --dataset image --word-dropout 0   # 
 python -m experiments.plot_neural_network --run-id RUN_ID
 python -m experiments.plot_neural_network --dataset image --compare word_dropout
 
-# Retrain both models on all labeled data and write submissions/submission.csv
+# Retrain on all labeled data and write submissions/submission.csv:
+# averages 3 models (seeds 42, 7, 123) per task; --seeds 42 gives a single model
 python submission.py
 ```
 
