@@ -40,8 +40,9 @@ COMP472-Project-Fall2026/
 ├── tests/           # Algorithm and integration tests
 ├── data/            # Local Kaggle datasets (not tracked)
 ├── submissions/     # Kaggle prediction files (not tracked)
+├── submission.py    # Train final models and write the Kaggle CSV
 ├── requirements.txt
-└── README.m
+└── README.md
 ```
 
 ## Team Responsibilities
@@ -90,45 +91,47 @@ Run the tests:
 python -m unittest discover -s tests -v
 ```
 
-## Neural network experiments
+## Neural network
+
+A feed-forward network with one hidden layer (PyTorch), trained separately for
+each task. Code: `models/neural_network.py`.
+
+| Setting | Image (500 → 50) | Sentiment (768 → 3) |
+| --- | --- | --- |
+| Hidden layer | 4096 neurons, GELU, dropout 0.6 | 256 neurons, GELU, dropout 0.2 |
+| Input | Visual-word counts, each row scaled to length 1 | Standardized features |
+| Word dropout | 0.4 | — |
+| Optimizer | AdamW, learning rate 0.001, weight decay 0.05 | AdamW, learning rate 0.0001 |
+| Learning-rate schedule | One-cycle (warm up, then cosine decay) | Constant |
+| Batch size / epochs | 128 / 40 | 64 / 15 |
+
+How it works:
+
+- **Counts:** each image row is a vector of visual-word counts scaled to
+  length 1. `recover_counts` (in `utils/preprocessing.py`) divides each row by
+  its smallest non-zero value to get the counts back.
+- **Word dropout:** in each training batch, every counted word is removed with
+  probability 0.4. This stops the network memorizing exact rows.
+  Validation and test data are never changed.
+- **Evaluation:** training runs for a fixed number of epochs, and the final epoch is
+  reported. The validation set never chooses an epoch. Scaling is fitted on
+  training data only.
+
+Run from the repository root:
 
 ```bash
+# Train on the 80% split, evaluate on the 20% split
 python -m experiments.train_neural_network --dataset image
-python -m experiments.train_neural_network --dataset sentiment
-```
+python -m experiments.train_neural_network --dataset image --word-dropout 0   # change one setting
 
-The baseline uses one hidden layer of 256 neurons, ReLU, Adam, learning rate
-`0.001`, batch size `64`, standardized features, and seed `42`. Dropout and
-weight decay are off. Training runs for up to 50 epochs, stopping after 10
-without improved validation accuracy. The shared 80/20 split stays fixed.
-
-Run a preset or override individual settings:
-
-```bash
-python -m experiments.train_neural_network --dataset image --preset dropout_0.2
-python -m experiments.train_neural_network --dataset image --hidden-sizes 256 128 --learning-rate 0.0001
-```
-
-Use `--help` to see all presets and options. Run experiments one at a time.
-ReLU remains the default activation; use `--activation gelu` to compare GELU.
-Activation is recorded with the other experiment settings.
-
-Each run saves under `results/neural_network/`:
-
-- `experiments.csv`: settings and summary metrics from the best checkpoint.
-- `epoch_history.csv`: training and validation loss/accuracy for each epoch.
-- `checkpoints/`: best model weights and scaler statistics (gitignored).
-- `runs/<run_id>/`: configuration, reproducibility metadata, split IDs, and
-  validation predictions with true/predicted labels.
-
-Generate graphs and derived metrics later without retraining. Replace `RUN_ID`
-with an ID from `experiments.csv`:
-
-```bash
+# Learning curves, confusion matrix, per-class metrics; compare runs
 python -m experiments.plot_neural_network --run-id RUN_ID
-python -m experiments.plot_neural_network --dataset image --compare learning_rate
+python -m experiments.plot_neural_network --dataset image --compare word_dropout
+
+# Retrain both models on all labeled data and write submissions/submission.csv
+python submission.py
 ```
 
-The first command creates learning curves, a confusion matrix, and per-class
-precision, recall, and F1. The second compares saved experiments. Compare runs
-where other settings are held fixed.
+Use `--help` to list every setting. Each run saves its config, per-epoch
+history and validation predictions to `results/neural_network/runs/<run_id>/`,
+and adds a summary row to `results/neural_network/experiments.csv`.
