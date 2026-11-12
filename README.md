@@ -98,7 +98,7 @@ each task. Code: `models/neural_network.py`.
 
 | Setting | Image (500 → 50) | Sentiment (768 → 3) |
 | --- | --- | --- |
-| Hidden layer | 4096 neurons, GELU, dropout 0.6 | 256 neurons, GELU, dropout 0.2 |
+| Hidden layer | 4096 neurons, GELU, dropout 0.4 | 256 neurons, GELU, dropout 0.2 |
 | Input | Visual-word counts, each row scaled to length 1 | Standardized features |
 | Word dropout | 0.4 | — |
 | Optimizer | AdamW, learning rate 0.001, weight decay 0.05 | AdamW, learning rate 0.0001 |

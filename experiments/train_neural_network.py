@@ -22,7 +22,7 @@ from utils.preprocessing import split_dataset
 # Selected settings for each task; experiments change one setting at a time.
 DEFAULTS = {
     "image": {
-        "hidden_sizes": [4096], "activation": "GELU", "dropout": 0.6, "word_dropout": 0.4,
+        "hidden_sizes": [4096], "activation": "GELU", "dropout": 0.4, "word_dropout": 0.4,
         "preprocessing": "counts", "optimizer": "AdamW", "learning_rate": 1e-3, "weight_decay": 0.05,
         "schedule": "onecycle", "batch_size": 128, "epochs": 40, "seed": 42,
     },
