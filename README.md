@@ -40,9 +40,9 @@ COMP472-Project-Fall2026/
 ├── tests/           # Algorithm and integration tests
 ├── data/            # Local Kaggle datasets (not tracked)
 ├── submissions/     # Kaggle prediction files (not tracked)
-├── submission.py    # Final prediction generation
+├── submission.py    # Train final models and write the Kaggle CSV
 ├── requirements.txt
-└── README.m
+└── README.md
 ```
 
 ## Team Responsibilities
@@ -90,3 +90,49 @@ Run the tests:
 ```bash
 python -m unittest discover -s tests -v
 ```
+
+## Neural network
+
+A feed-forward network with one hidden layer (PyTorch), trained separately for
+each task. Code: `models/neural_network.py`.
+
+| Setting | Image (500 → 50) | Sentiment (768 → 3) |
+| --- | --- | --- |
+| Hidden layer | 4096 neurons, GELU, dropout 0.4 | 256 neurons, GELU, dropout 0.2 |
+| Input | Visual-word counts, each row scaled to length 1 | Standardized features |
+| Word dropout | 0.4 | — |
+| Optimizer | AdamW, learning rate 0.001, weight decay 0.05 | AdamW, learning rate 0.0001 |
+| Learning-rate schedule | One-cycle (warm up, then cosine decay) | Constant |
+| Batch size / epochs | 128 / 40 | 64 / 15 |
+
+How it works:
+
+- **Counts:** each image row is a vector of visual-word counts scaled to
+  length 1. `recover_counts` (in `utils/preprocessing.py`) divides each row by
+  its smallest non-zero value to get the counts back.
+- **Word dropout:** in each training batch, every counted word is removed with
+  probability 0.4. This stops the network memorizing exact rows.
+  Validation and test data are never changed.
+- **Evaluation:** training runs for a fixed number of epochs, and the final epoch is
+  reported. The validation set never chooses an epoch. Scaling is fitted on
+  training data only.
+
+Run from the repository root:
+
+```bash
+# Train on the 80% split, evaluate on the 20% split
+python -m experiments.train_neural_network --dataset image
+python -m experiments.train_neural_network --dataset image --word-dropout 0   # change one setting
+
+# Learning curves, confusion matrix, per-class metrics; compare runs
+python -m experiments.plot_neural_network --run-id RUN_ID
+python -m experiments.plot_neural_network --dataset image --compare word_dropout
+
+# Retrain on all labeled data and write submissions/submission.csv:
+# averages 3 models (seeds 42, 7, 123) per task; --seeds 42 gives a single model
+python submission.py
+```
+
+Use `--help` to list every setting. Each run saves its config, per-epoch
+history and validation predictions to `results/neural_network/runs/<run_id>/`,
+and adds a summary row to `results/neural_network/experiments.csv`.

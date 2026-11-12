@@ -94,6 +94,27 @@ class Standardizer:
         return ((X - self.mean_) / self.scale_).astype(np.float32)
 
 
+def recover_counts(X: np.ndarray) -> np.ndarray:
+    """Recover integer visual-word counts from L2-normalized image feature rows.
+
+    Each image row equals counts / ||counts||, so dividing by the smallest
+    positive value gives the counts, assuming the smallest count is 1. This is
+    a fixed per-row transform, so it learns nothing and cannot leak data. Raise
+    an error rather than guess if a row is not a scaled count vector.
+    """
+    X = np.asarray(X, dtype=np.float64)
+    if X.ndim != 2 or X.size == 0 or (X < 0).any():
+        raise ValueError("X must be a nonempty 2-D array of nonnegative values.")
+    smallest = np.where(X > 0, X, np.inf).min(axis=1, keepdims=True)
+    if not np.isfinite(smallest).all():
+        raise ValueError("Every row needs at least one positive value.")
+    ratios = X / smallest
+    counts = np.rint(ratios)
+    if np.abs(ratios - counts).max() > 1e-3:
+        raise ValueError("Rows are not scaled integer counts.")
+    return counts.astype(np.float32)
+
+
 def standardize_split(split: DatasetSplit) -> tuple[DatasetSplit, Standardizer]:
     """Return a scaled copy and scaler, fitting exclusively on split.train.X.
 

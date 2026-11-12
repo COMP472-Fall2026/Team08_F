@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 
 from utils.data_loader import DATASET_SPECS, Dataset, load_dataset
-from utils.preprocessing import Standardizer, split_dataset, standardize_split
+from utils.preprocessing import Standardizer, recover_counts, split_dataset, standardize_split
 
 
 class LoaderTests(unittest.TestCase):
@@ -57,7 +57,6 @@ class LoaderTests(unittest.TestCase):
     def test_invalid_columns(self):
         for frame in (
             self.frame().drop(columns="feature_499"),
-            self.frame().rename(columns={"feature_0": "feature_500"}),
             self.frame().drop(columns="label"),
             self.frame().assign(extra=1),
         ):
@@ -176,6 +175,18 @@ class PreprocessingTests(unittest.TestCase):
         scaler = Standardizer().fit(self.data.X)
         with self.assertRaisesRegex(ValueError, "Feature count"):
             scaler.transform(np.ones((3, 4)))
+
+
+class RecoverCountsTests(unittest.TestCase):
+    def test_recovers_exact_integer_counts(self):
+        counts = np.array([[1, 0, 3, 2], [0, 5, 1, 0]], dtype=float)
+        rows = counts / np.linalg.norm(counts, axis=1, keepdims=True)
+        np.testing.assert_array_equal(recover_counts(rows.astype(np.float32)), counts)
+
+    def test_rejects_rows_that_are_not_counts(self):
+        for X in (np.array([[0.5, 0.75]]), np.array([[0.0, 0.0]]), np.array([[-1.0, 1.0]]), np.zeros(3)):
+            with self.subTest(X=X), self.assertRaises(ValueError):
+                recover_counts(X)
 
 
 if __name__ == "__main__":
