@@ -1,9 +1,9 @@
-"""Train the final NN models on all labeled data and write submissions/submission.csv.
+"""Train the final neural networks on all labeled data and write submissions/submission.csv.
 
-Run from the repository root:
-    python submission.py              # ensemble of 3 models (seeds 42, 7, 123)
-    python submission.py --seeds 42   # single model
-Hidden test features are only used for prediction; no test labels exist locally.
+python submission.py              # average of 3 models per task (seeds 42, 7, 123)
+python submission.py --seeds 42   # one model per task
+
+The test files have no labels; they are only used to make predictions.
 """
 
 import argparse
@@ -13,7 +13,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from experiments.train_neural_network import experiment_config
+from experiments.train_neural_network import ENSEMBLE_SEEDS, experiment_config
 from models.neural_network import predict_proba, train_model
 from utils.data_loader import DATASET_SPECS, load_dataset
 
@@ -21,9 +21,10 @@ PREFIXES = {"image": "img_", "sentiment": "text_"}
 
 
 def make_submission(predictions: dict[str, pd.DataFrame], sample: pd.DataFrame) -> pd.DataFrame:
-    """Merge per-task (id, label) predictions onto the template's IDs and validate.
+    """Combine each task's (id, label) predictions into one table in the template's order.
 
-    Merging by ID means row order in the test files and template never matters.
+    Rows are matched by ID, so the order of the test files does not matter.
+    Raises an error if an ID is missing, repeated or unknown, or a label is out of range.
     """
     combined = pd.concat(predictions.values(), ignore_index=True)
     submission = sample[["id"]].merge(combined, on="id", how="left", validate="one_to_one")
@@ -39,8 +40,8 @@ def make_submission(predictions: dict[str, pd.DataFrame], sample: pd.DataFrame) 
     return submission
 
 
-def main(data_dir="data", output_dir="submissions", seeds=(42, 7, 123)):
-    """Average the predicted probabilities of one model per seed, for each task."""
+def main(data_dir="data", output_dir="submissions", seeds=ENSEMBLE_SEEDS):
+    """For each task, train one model per seed on all labeled data and average their predictions."""
     predictions, configs = {}, {}
     for task in PREFIXES:
         config = experiment_config(task)
@@ -48,7 +49,7 @@ def main(data_dir="data", output_dir="submissions", seeds=(42, 7, 123)):
         probabilities = []
         for seed in seeds:
             print(f"Training final {task} model (seed {seed}) on {len(train.y)} labeled examples")
-            # Same settings and epoch count as validation; preprocessing is refit on all labeled data.
+            # Same settings as in the experiments; preprocessing is refitted on all labeled data.
             model, pipeline, _ = train_model({**config, "seed": seed}, train.X, train.y, DATASET_SPECS[task][1])
             probabilities.append(predict_proba(model, pipeline, test.X))
         labels = np.mean(probabilities, axis=0).argmax(axis=1)
@@ -65,6 +66,6 @@ def main(data_dir="data", output_dir="submissions", seeds=(42, 7, 123)):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--seeds", type=int, nargs="+", default=[42, 7, 123],
+    parser.add_argument("--seeds", type=int, nargs="+", default=ENSEMBLE_SEEDS,
                         help="one model is trained per seed and their probabilities are averaged")
     main(seeds=parser.parse_args().seeds)
