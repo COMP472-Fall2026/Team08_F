@@ -1,3 +1,0 @@
-task,scaling,distance,weighted,k,accuracy,seconds
-image,standardized,cosine,False,1,0.534,3.34
-sentiment,unscaled,euclidean,False,20,0.57458,1.54

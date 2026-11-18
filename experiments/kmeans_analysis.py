@@ -17,9 +17,8 @@ from models.kmeans import KMeans
 from utils.data_loader import load_dataset
 
 # Use the same settings as kmeans_experiment.py.
-K_VALUES = [3, 5, 7, 9, 20]
+K_VALUES = [3, 6, 9]
 SEED = 42
-MAX_ITERATIONS = 100
 OUTPUT = ROOT / "results" / "kmeans_analysis"
 
 
@@ -35,7 +34,7 @@ def main():
         print(f"Running k-Means with k = {k}...", flush=True)
 
         # Fit using features only. Actual sentiment labels are not used here.
-        model = KMeans(k=k, max_iterations=MAX_ITERATIONS, seed=SEED)
+        model = KMeans(k=k, seed=SEED)
         model.fit(X)
         labels = model.labels
 
@@ -73,7 +72,7 @@ def main():
         # Overall purity is the fraction of samples in their cluster's majority class.
         purity = dominant_count / len(X)
         summary.append({"k": k, "purity": purity, "wcss": wcss,
-                        "seed": SEED, "max_iterations": MAX_ITERATIONS})
+                        "seed": SEED})
         all_clusters.extend(cluster_rows)
         print(f"  Purity: {purity:.2%} | WCSS: {wcss:,.2f}")
 
