@@ -50,15 +50,21 @@ Run every command from the repository root. A GPU is not required.
 ```text
 COMP472-Project-Fall2026/
 ├── models/
-│   └── neural_network.py         # Network, input preprocessing, training loop, prediction
+│   ├── decision_tree.py          # From-scratch CART decision tree (NumPy only)
+│   ├── neural_network.py         # Network, input preprocessing, training loop, prediction
+│   └── random_forest.py          # From-scratch random forest, built on decision_tree.py
 ├── utils/
 │   ├── data_loader.py            # Load and validate the Kaggle CSVs
+│   ├── metrics.py                # Accuracy, confusion matrix, per-class report
 │   └── preprocessing.py          # Shared 80/20 split, standardization, word-count recovery
 ├── experiments/
-│   └── train_neural_network.py   # Neural network experiments; results saved to CSV
+│   ├── train_neural_network.py   # Neural network experiments; results saved to CSV
+│   ├── tree_experiment.py        # Decision tree and forest sweeps; results saved to CSV
+│   └── tree_submission.py        # Final forests refitted on all labeled data
 ├── tests/
 │   ├── test_data_pipeline.py     # Data loading, split and preprocessing tests
-│   └── test_neural_network.py    # Network, training, experiment and submission tests
+│   ├── test_neural_network.py    # Network, training, experiment and submission tests
+│   └── test_tree_models.py       # Tree and forest correctness, determinism, binning tests
 ├── submission.py                 # Train the final models and write the Kaggle submission
 ├── requirements.txt              # Python dependencies and tested versions
 ├── data/                         # Kaggle CSVs (downloaded, not tracked)
@@ -179,6 +185,59 @@ is refitted on that data), predicts the hidden test set, and averages the models
 probabilities. Predictions are matched to `data/sample_submission.csv` by ID and checked
 (every ID exactly once, labels in range), then written to `submissions/submission.csv`
 (`id,label`). The settings used are saved to `submissions/submission_config.json`.
+
+## Decision tree and random forest
+
+Both are written from scratch in NumPy, with no scikit-learn classifiers:
+`models/decision_tree.py` (CART, binary splits, Gini / entropy / misclassification
+criteria, histogram split search) and `models/random_forest.py`, which imports the tree
+rather than reimplementing it and adds bootstrap sampling, per-node feature
+subsampling, a soft vote over class probabilities, out-of-bag scoring and
+parallel fitting. Each tree's seed is drawn up front, so a parallel fit and a
+serial fit with the same seed give identical predictions; `tests/test_tree_models.py`
+asserts this.
+
+### No scaling, by design
+
+Trees split on tests of the form `feature <= threshold`, so any strictly monotone
+rescaling maps every candidate threshold onto a corresponding one and leaves the
+fitted tree unchanged. `standardize_split` is therefore deliberately not used here,
+unlike in the k-NN and neural network sections. The one transform applied is
+histogram binning onto a quantile grid computed on training rows only (no
+leakage), which makes the split search O(bins) per feature instead of O(distinct
+values). The image features are 85% zeros, so a naive quantile grid collapses
+onto the zero mass; the binner gives a dominant repeated value its own bin and
+spreads the remaining edges over the non-zero values.
+
+### Final configuration
+
+| Setting | Image (500 → 50) | Sentiment (768 → 3) |
+| --- | --- | --- |
+| Model | Random forest, 300 trees | Random forest, 300 trees |
+| Criterion | Gini | Gini |
+| Maximum depth | Unrestricted | 12 |
+| Minimum leaf size | 1 | 1 |
+| Features per split | 0.05 (25 of 500) | sqrt (27 of 768) |
+| Histogram bins | 64 | 64 |
+
+The two tasks genuinely disagree: the sentiment forest peaks at depth 12 and
+falls beyond it, while the image forest improves all the way to unrestricted
+depth. These settings are in `FINAL_SETTINGS` in `experiments/tree_submission.py`.
+
+### Run the experiments
+
+```bash
+python experiments/tree_experiment.py                       # every sweep, both tasks
+python experiments/tree_experiment.py --task image --sweep depth
+python experiments/tree_experiment.py --subsample 2000      # quick smoke run
+python experiments/tree_submission.py                       # holdout check, then refit on 100%
+```
+
+Each sweep writes `results/<task>_<sweep>.csv`: `depth`, `leaf`, `criterion`, `bins`,
+`trees`, `features` and `overfit` (tree against forest at matched depth). All of them
+use `split_dataset` with seed 42, so the numbers are comparable with the other
+classifiers. `tree_submission.py` reuses `submission.make_submission` to assemble and
+validate its output.
 
 ## Reproducibility
 
