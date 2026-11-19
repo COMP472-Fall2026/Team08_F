@@ -29,6 +29,7 @@ WEIGHTING = [False, True]
 
 
 def main():
+    """Run all 40 k-NN settings on each dataset and save the results."""
     clear_results(ALGORITHM)
     for task in TASKS:
         data = load_dataset(task)

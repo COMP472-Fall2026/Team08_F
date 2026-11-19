@@ -1,12 +1,15 @@
 """Random forest built on top of the from-scratch DecisionTreeClassifier.
 
-Two things make this usable at 20k x 500 scale:
+Each tree is trained on a bootstrap sample of the training rows (drawn with
+replacement) and considers only a random subset of features at each split. The
+forest predicts by averaging the trees' class probabilities.
 
-  * the quantile binning is computed ONCE and shared by every tree, so growing
-    300 trees does not re-bin the data 300 times;
-  * trees are grown in parallel with fork-based processes.  The binned matrix
-    lives in a module global set before the pool is created, so fork shares it
-    copy-on-write and nothing large is ever pickled on the way in.
+Two things keep it fast enough for 20,000 x 500 data:
+  * the features are binned once and the bins are shared by every tree, instead of
+    re-binning the data for each of the 300 trees;
+  * trees are trained in parallel, one process per CPU core. The binned data is put
+    in a module-level variable before the processes start, so each process can read
+    it without it being copied to them.
 """
 
 import multiprocessing as mp
@@ -15,10 +18,15 @@ import numpy as np
 from models.decision_tree import (DecisionTreeClassifier, apply_bins, compute_bin_edges,
                    resolve_max_features)
 
-_SHARED = {}
+_SHARED = {}  # binned training data, read by the worker processes
 
 
 def _fit_one_tree(args):
+    """Train one tree of the forest (runs in a worker process).
+
+    Returns the tree and, if requested, its predictions for the rows it did not
+    train on (its "out-of-bag" rows), used to compute out-of-bag accuracy.
+    """
     seed, params, bootstrap, max_samples, want_oob = args
     Xb = _SHARED["Xb"]
     y = _SHARED["y"]
@@ -27,6 +35,8 @@ def _fit_one_tree(args):
     C = _SHARED["C"]
     n = Xb.shape[0]
 
+    # Bootstrap sample: n rows drawn with replacement, so some rows repeat and
+    # about a third are left out.
     rng = np.random.default_rng(seed)
     if bootstrap:
         n_draw = n if max_samples is None else max(1, int(round(max_samples * n)))
@@ -68,6 +78,14 @@ def _predict_binned(tree, Xb, rows):
 
 
 class RandomForestClassifier:
+    """A forest of decision trees, each trained on a bootstrap sample with random feature subsets.
+
+    max_features is the number of features each split may consider ("sqrt", "log2",
+    a fraction or a count); fewer features make the trees more different from each
+    other, which helps the average. voting="soft" averages the trees' class
+    probabilities; "hard" counts one vote per tree. n_jobs=0 uses every CPU core.
+    """
+
     def __init__(self, n_estimators=100, criterion="gini", max_depth=None,
                  min_samples_split=2, min_samples_leaf=1, max_features="sqrt",
                  min_impurity_decrease=0.0, bootstrap=True, max_samples=None,
@@ -91,12 +109,14 @@ class RandomForestClassifier:
         self.sparse_aware = sparse_aware
 
     def fit(self, X, y):
+        """Train n_estimators trees on bootstrap samples of (X, y)."""
         X = np.asarray(X, dtype=np.float32)
         y = np.asarray(y)
         self.classes_, y_enc = np.unique(y, return_inverse=True)
         C = len(self.classes_)
         rng = np.random.default_rng(self.random_state)
 
+        # Bin the features once; every tree reuses the same bins.
         edges = compute_bin_edges(X, self.n_bins, rng=rng,
                                   sparse_aware=self.sparse_aware)
         Xb, B = apply_bins(X, edges)
@@ -115,10 +135,14 @@ class RandomForestClassifier:
         _SHARED.clear()
         _SHARED.update(Xb=Xb, y=y_enc.astype(np.int64), edges=edges, B=B, C=C)
 
+        # Every tree's seed is drawn now, so the forest is the same whether the trees
+        # are trained in parallel or one after another.
         seeds = rng.integers(0, 2**31 - 1, size=self.n_estimators)
         jobs = [(int(s), params, self.bootstrap, self.max_samples,
                  self.oob_score) for s in seeds]
 
+        # Train the trees in parallel; if that is not possible (e.g. on Windows, where
+        # "fork" does not exist), train them one after another instead.
         n_jobs = self.n_jobs if self.n_jobs and self.n_jobs > 0 else mp.cpu_count()
         results = None
         if n_jobs > 1 and self.n_estimators > 1:
@@ -138,6 +162,8 @@ class RandomForestClassifier:
         for t in self.estimators_:
             t.classes_ = self.classes_
 
+        # Out-of-bag accuracy: each row is predicted only by the trees that did not
+        # train on it, and those trees vote.
         self.oob_score_ = None
         if self.oob_score and self.bootstrap:
             votes = np.zeros((X.shape[0], C), dtype=np.int32)
@@ -156,6 +182,7 @@ class RandomForestClassifier:
     # ------------------------------------------------------------- prediction
 
     def predict_proba(self, X):
+        """Average of the trees' class probabilities (or of their votes, with hard voting)."""
         X = np.asarray(X, dtype=np.float32)
         C = len(self.classes_)
         acc = np.zeros((X.shape[0], C), dtype=np.float64)
@@ -167,6 +194,7 @@ class RandomForestClassifier:
         return acc / len(self.estimators_)
 
     def predict(self, X):
+        """Predicted class label: the class with the highest averaged probability."""
         return self.classes_[self.predict_proba(X).argmax(axis=1)]
 
     def staged_predict(self, X, checkpoints):
@@ -189,8 +217,10 @@ class RandomForestClassifier:
 
     @property
     def mean_depth_(self):
+        """Average depth of the trees."""
         return float(np.mean([t.depth_ for t in self.estimators_]))
 
     @property
     def mean_leaves_(self):
+        """Average number of leaves per tree."""
         return float(np.mean([t.n_leaves_ for t in self.estimators_]))

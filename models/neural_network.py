@@ -46,7 +46,7 @@ class NeuralNetwork(nn.Module):
         self.layers = nn.Sequential(*layers)
 
     def forward(self, X: Tensor) -> Tensor:
-        # Raw scores (logits). The loss function applies softmax itself.
+        """Raw class scores (logits); the loss function applies softmax itself."""
         return self.layers(X)
 
 
@@ -70,6 +70,7 @@ class InputPipeline:
         self.count_scale: float | None = None
 
     def fit(self, X: np.ndarray) -> "InputPipeline":
+        """Learn the preprocessing statistics from training data only."""
         if self.kind == "standardized":
             self.scaler = Standardizer().fit(X)
         else:

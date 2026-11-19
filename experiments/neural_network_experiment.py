@@ -163,6 +163,7 @@ def run_all(dataset: str, data_dir="data", results_dir=RESULTS_DIR) -> None:
 
 
 def main():
+    """Run every experiment, or a single run if settings are given on the command line."""
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--dataset", choices=[*DATASET_SPECS, "both"], default="both")
     parser.add_argument("--ensemble", action="store_true",

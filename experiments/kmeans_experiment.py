@@ -30,6 +30,7 @@ CLASS_NAMES = ["negative", "neutral", "positive"]
 
 
 def main():
+    """Cluster the sentiment data for each k and save purity, WCSS and cluster composition."""
     folder = clear_results(ALGORITHM)
     # Clustering is unsupervised, so it uses all labeled rows (no train/validation split).
     data = load_dataset(DATASET)

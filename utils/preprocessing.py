@@ -49,6 +49,7 @@ def split_dataset(
     )
 
     def subset(indices: np.ndarray) -> Dataset:
+        """The rows at these positions, as a Dataset."""
         # Take the same rows from X, y and ids so they stay aligned.
         return Dataset(data.X[indices], data.y[indices], data.ids[indices])
 
@@ -121,6 +122,7 @@ def standardize_split(split: DatasetSplit) -> tuple[DatasetSplit, Standardizer]:
     scaler = Standardizer().fit(split.train.X)
 
     def scaled(data: Dataset) -> Dataset:
+        """A standardized copy of a Dataset."""
         return Dataset(scaler.transform(data.X), data.y.copy(), data.ids.copy())
 
     return DatasetSplit(

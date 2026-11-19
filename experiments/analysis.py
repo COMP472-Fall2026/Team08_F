@@ -65,6 +65,7 @@ def sort_key(value):
 
 
 def setting_columns(runs: pd.DataFrame) -> list[str]:
+    """The columns of experiments.csv that are settings (everything except IDs and metrics)."""
     return [c for c in runs.columns if c not in ID_COLUMNS + METRIC_COLUMNS]
 
 
@@ -265,6 +266,7 @@ def analyse(algorithm: str, results_dir: Path | None = None) -> dict:
 
 
 def main():
+    """Analyse every algorithm that has results (or just --algorithm), then compare them."""
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--algorithm", help="only this results folder (e.g. knn); default: all of them")
     args = parser.parse_args()

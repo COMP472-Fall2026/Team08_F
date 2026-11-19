@@ -91,6 +91,7 @@ def fit_forest(task, train, validation, sweep, n_jobs=0, oob=False, **settings):
 
 
 def _save(task, sweep, model, settings, metrics, validation, predicted):
+    """Save one tree or forest run in the shared results format and print its accuracy."""
     name = f"{model}: " + ", ".join(f"{key}={value}" for key, value in settings.items())
     save_run(ALGORITHM, task, sweep, name, {"model": model, **settings}, metrics,
              ids=validation.ids, y_true=validation.y, y_pred=predicted)
@@ -135,6 +136,7 @@ def run_sweep(sweep, task, train, validation, args):
 
 
 def main():
+    """Run the chosen sweeps (all by default) on the chosen datasets (both by default)."""
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--dataset", default="both", choices=TASKS + ["both"])
