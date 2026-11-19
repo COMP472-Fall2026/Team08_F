@@ -1,7 +1,5 @@
 # COMP 472 – Artificial Intelligence Project
 
-Concordia University | Fall 2026
-
 This project implements and compares machine learning algorithms on two independent
 classification tasks, using pre-extracted numerical feature vectors:
 
@@ -12,12 +10,6 @@ classification tasks, using pre-extracted numerical feature vectors:
 
 Algorithms: k-nearest neighbours (k-NN), decision tree, random forest, a feed-forward
 neural network, and k-means clustering. A separate model is trained for each task.
-
-| Member | Responsibilities |
-| --- | --- |
-| Member 1 | k-NN, clustering, data preprocessing |
-| Member 2 | Decision tree, random forest |
-| Member 3 | Neural network, evaluation, Kaggle submission |
 
 **Quick start** (from the repository root, after the setup below):
 
@@ -69,7 +61,7 @@ python submission.py                              # apply the final model: Kaggl
 
 ## 2. Setup
 
-1. **Python 3.10 or newer** (tested with 3.14.7).
+1. **Python 3.11 or newer** (tested on 3.11 and 3.14).
 2. **Install the packages** from the repository root:
    ```bash
    pip install -r requirements.txt
@@ -166,16 +158,6 @@ final forest for each task:
 | Maximum depth | unrestricted | 12 |
 | Features per split | 0.05 (25 of 500) | sqrt (27 of 768) |
 
-Other quick ways to check the tree code:
-
-| To check | Command |
-| --- | --- |
-| The tree and forest code is correct | `python -m unittest tests/test_tree_models.py` |
-| One experiment, e.g. tree depth (under- and overfitting) | `python experiments/tree_experiment.py --sweep depth` |
-| The whole pipeline, on 2,000 training rows | `python experiments/tree_experiment.py --subsample 2000` |
-
-`--dataset image` or `--dataset sentiment` limits any of these to one dataset.
-
 ### Neural network
 
 ```bash
@@ -224,7 +206,7 @@ precision/recall/F1 of the best run, learning curves (neural network) and cluste
 composition charts (k-means). `results/comparison/` gets the validation accuracy of each
 classifier's final model and how often their mistakes overlap.
 
-## 6. Apply the model: Kaggle submission
+## 6. Kaggle submission
 
 The neural network is the final model, as it has the best validation accuracy on both
 tasks.
@@ -239,17 +221,6 @@ predicted class probabilities on the test data, matches the predictions to
 `data/sample_submission.csv` by ID, checks them (every ID exactly once, labels in range)
 and writes `submissions/submission.csv` (`id,label`).
 
-The other models are applied the same way in Python, with `fit` then `predict`, for example:
-
-```python
-from models.knn import KNNClassifier
-from utils.data_loader import load_dataset
-
-train, test = load_dataset("sentiment"), load_dataset("sentiment", "test")
-model = KNNClassifier(k=20, distance="euclidean")
-model.fit(train.X, train.y)
-predictions = model.predict(test.X)
-```
 
 ## 7. Results files
 
@@ -263,13 +234,3 @@ Each experiment script saves to `results/<algorithm>/` (`knn`, `trees`, `neural_
 | `history.csv` (neural network) | run, seed and epoch | train and validation accuracy and loss after each epoch |
 | `cluster_composition.csv` (k-means) | k and cluster | number of examples of each class in each cluster |
 
-## 8. Reproducibility
-
-- **Seeds:** the train/validation split always uses seed 42. Training randomness uses
-  fixed seeds (neural network 42, plus 7 and 123 for the final model; forests 0;
-  k-means 42), recorded in `experiments.csv`.
-- **Settings:** every setting of every run is recorded in `experiments.csv`.
-- **Versions:** Python and package versions are listed in `requirements.txt`.
-
-Results should match closely when rerun, though not necessarily bit for bit, since
-PyTorch and parallel tree training can vary slightly between machines.
