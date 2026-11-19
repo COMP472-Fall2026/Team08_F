@@ -13,7 +13,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from experiments.train_neural_network import ENSEMBLE_SEEDS, experiment_config
+from experiments.neural_network_experiment import ENSEMBLE_SEEDS, experiment_config
 from models.neural_network import predict_proba, train_model
 from utils.data_loader import DATASET_SPECS, load_dataset
 

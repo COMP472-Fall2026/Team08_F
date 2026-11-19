@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 import torch
 
-from experiments.train_neural_network import EXPERIMENTS, experiment_config, run_experiment
+from experiments.neural_network_experiment import EXPERIMENTS, experiment_config, run_experiment
 from models.neural_network import InputPipeline, NeuralNetwork, predict_proba, train_model, word_dropout
 from submission import make_submission
 from utils.data_loader import Dataset
@@ -117,19 +117,20 @@ class ExperimentTests(unittest.TestCase):
         directory = tempfile.TemporaryDirectory()
         self.addCleanup(directory.cleanup)
         self.root = Path(directory.name)
+        self.folder = self.root / "neural_network"  # where save_run writes this algorithm's files
         X, _ = count_rows(rows=30)
         self.data = Dataset(X, np.tile([0, 1, 2], 10), np.array([f"img_train_{i:03d}" for i in range(30)]))
 
     def run_small(self, **overrides):
         return run_experiment("image", {"hidden_sizes": [8], "epochs": 2, **overrides},
-                              results_dir=self.root, data=self.data)
+                              results_dir=self.root, data=self.data, verbose=False)
 
     def test_run_appends_final_epoch_records_to_csvs(self):
         summary = self.run_small()
-        history = pd.read_csv(self.root / "history.csv")
+        history = pd.read_csv(self.folder / "history.csv")
         self.assertEqual(list(history.epoch), [1, 2])
         self.assertAlmostEqual(summary["val_accuracy"], history.val_accuracy.iloc[-1])
-        saved = pd.read_csv(self.root / "validation_predictions.csv")
+        saved = pd.read_csv(self.folder / "validation_predictions.csv")
         split = split_dataset(self.data)
         np.testing.assert_array_equal(saved.id, split.validation.ids)
         np.testing.assert_array_equal(saved.true_label, split.validation.y)
@@ -137,28 +138,28 @@ class ExperimentTests(unittest.TestCase):
 
         # A second run adds rows to the same files; run_id links rows across them.
         second = self.run_small(word_dropout=0.0)
-        experiments = pd.read_csv(self.root / "experiments.csv")
+        experiments = pd.read_csv(self.folder / "experiments.csv")
         self.assertEqual(list(experiments.run_id), [summary["run_id"], second["run_id"]])
         self.assertEqual(list(experiments.word_dropout), [0.4, 0.0])
-        self.assertEqual(set(pd.read_csv(self.root / "history.csv").run_id), set(experiments.run_id))
+        self.assertEqual(set(pd.read_csv(self.folder / "history.csv").run_id), set(experiments.run_id))
 
     def test_ensemble_averages_one_model_per_seed_into_one_row(self):
         single = [self.run_small(seed=seed) for seed in (1, 2)]
         ensemble = run_experiment("image", {"hidden_sizes": [8], "epochs": 2}, seeds=[1, 2],
-                                  results_dir=self.root, data=self.data)
+                                  results_dir=self.root, data=self.data, verbose=False)
         self.assertEqual(ensemble["seed"], "1 2")
-        history = pd.read_csv(self.root / "history.csv")
+        history = pd.read_csv(self.folder / "history.csv")
         self.assertEqual(list(history[history.run_id == ensemble["run_id"]].seed), [1, 1, 2, 2])
         # Each member trains exactly like the matching single-seed run.
         members = history[history.run_id == ensemble["run_id"]].groupby("seed").val_loss.last()
         self.assertAlmostEqual(members[1], single[0]["val_loss"], places=4)
         self.assertAlmostEqual(members[2], single[1]["val_loss"], places=4)
-        self.assertEqual(len(pd.read_csv(self.root / "experiments.csv")), 3)
+        self.assertEqual(len(pd.read_csv(self.folder / "experiments.csv")), 3)
 
     def test_planned_experiments_are_valid_and_uniquely_named(self):
         for dataset, experiments in EXPERIMENTS.items():
-            self.assertEqual(len({name for name, _ in experiments}), len(experiments))
-            for name, overrides in experiments:
+            self.assertEqual(len({name for name, _, _ in experiments}), len(experiments))
+            for name, _, overrides in experiments:
                 with self.subTest(dataset=dataset, experiment=name):
                     experiment_config(dataset, **overrides)
 
@@ -166,7 +167,7 @@ class ExperimentTests(unittest.TestCase):
         rng = np.random.default_rng(8)
         data = Dataset(rng.normal(size=(30, 768)).astype(np.float32), self.data.y, self.data.ids)
         summary = run_experiment("sentiment", {"hidden_sizes": [8], "epochs": 1},
-                                 results_dir=self.root, data=data)
+                                 results_dir=self.root, data=data, verbose=False)
         self.assertEqual(summary["preprocessing"], "standardized")
 
     def test_invalid_options(self):

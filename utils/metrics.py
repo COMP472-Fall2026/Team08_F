@@ -37,8 +37,3 @@ def per_class_report(y_true, y_pred, labels=None):
             "f1": f1, "support": support,
             "macro_f1": float(f1.mean()),
             "accuracy": float(tp.sum() / max(cm.sum(), 1))}
-
-
-def overall_competition_score(image_accuracy, sentiment_accuracy):
-    """The competition metric: the plain mean of the two task accuracies."""
-    return (image_accuracy + sentiment_accuracy) / 2.0

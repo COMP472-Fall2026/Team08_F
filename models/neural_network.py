@@ -1,6 +1,6 @@
 """Feed-forward neural network: the model, its input preprocessing, training and prediction.
 
-Used by experiments/train_neural_network.py (validation experiments) and
+Used by experiments/neural_network_experiment.py (validation experiments) and
 submission.py (final Kaggle predictions).
 """
 
@@ -46,7 +46,7 @@ class NeuralNetwork(nn.Module):
         self.layers = nn.Sequential(*layers)
 
     def forward(self, X: Tensor) -> Tensor:
-        # Raw scores (logits). The loss function applies softmax itself.
+        """Raw class scores (logits); the loss function applies softmax itself."""
         return self.layers(X)
 
 
@@ -70,6 +70,7 @@ class InputPipeline:
         self.count_scale: float | None = None
 
     def fit(self, X: np.ndarray) -> "InputPipeline":
+        """Learn the preprocessing statistics from training data only."""
         if self.kind == "standardized":
             self.scaler = Standardizer().fit(X)
         else:

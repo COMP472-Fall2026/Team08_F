@@ -1,10 +1,11 @@
 """Decision tree classifier, implemented from scratch with NumPy only.
 
-Split finding is histogram based (the LightGBM trick): every feature is bucketed
-once into at most n_bins quantile bins, and each node's best split is then found
-with a single vectorised bincount + cumsum over the (feature, bin, class) cube.
-A pure-Python threshold scan over 20,000 x 500 data would take hours; this takes
-seconds, and it still finds an exact-on-the-grid optimum.
+How splits are found: before training, each feature's values are grouped into at
+most n_bins bins (quantile bins, computed from the training data). Each candidate
+split is then "feature <= bin edge", so a node only has to count how many examples
+of each class fall in each bin, which NumPy does for all features at once. Trying
+every distinct value of every feature instead would take hours on 20,000 x 500 data;
+this takes seconds and still finds the best split among the bin edges.
 
 No scikit-learn, no external ML library. NumPy and the standard library only.
 """
@@ -93,6 +94,11 @@ def apply_bins(X, edges):
 
 
 def resolve_max_features(max_features, n_features):
+    """Number of features to consider at each split.
+
+    None or "all" means every feature; "sqrt" and "log2" are computed from the number of
+    features; a float is a fraction of the features (0.05 = 5%); an int is a fixed count.
+    """
     if max_features is None or max_features == "all":
         return n_features
     if isinstance(max_features, str):
@@ -129,8 +135,10 @@ class DecisionTreeClassifier:
     # ---------------------------------------------------------------- fitting
 
     def fit(self, X, y):
+        """Bin the features using this training data, then grow the tree."""
         X = np.asarray(X, dtype=np.float32)
         y = np.asarray(y)
+        # Labels are re-numbered 0..C-1 internally; classes_ maps them back.
         self.classes_, y_enc = np.unique(y, return_inverse=True)
         rng = np.random.default_rng(self.random_state)
         edges = compute_bin_edges(X, self.n_bins, rng=rng,
@@ -155,17 +163,24 @@ class DecisionTreeClassifier:
         max_depth = np.inf if self.max_depth is None else self.max_depth
         msl = int(self.min_samples_leaf)
 
+        # The tree is stored as parallel lists, one entry per node: the feature and
+        # threshold it splits on (-1 for a leaf), its left and right children, and its
+        # majority class.
         feature, threshold, left, right, value = [], [], [], [], []
         split_bin = []           # bin index of the split; lets the forest descend
         n_samp, imp_, depth_ = [], [], []   # on binned data without re-deriving it
         proba = [] if self.store_proba else None
 
+        # Grow the tree with a stack instead of recursion. Each entry is a node still to
+        # be processed: (its training rows, depth, parent node, is it the left child,
+        # class counts of its rows).
         idx = np.asarray(idx)
         root_counts = np.bincount(y_enc[idx], minlength=C).astype(np.float64)
         stack = [(idx, 0, -1, False, root_counts)]
 
         while stack:
             node_idx, depth, parent, is_left, counts = stack.pop()
+            # Create the node (as a leaf for now) and link it to its parent.
             nid = len(feature)
             if parent >= 0:
                 if is_left:
@@ -186,19 +201,23 @@ class DecisionTreeClassifier:
             if proba is not None:
                 proba.append(counts / max(m, 1))
 
+            # Stopping rules: the node stays a leaf if it is deep enough, too small to
+            # split, or already pure (impurity 0).
             if (depth >= max_depth or m < self.min_samples_split
                     or m < 2 * msl or imp <= 0.0):
                 continue
 
+            # Consider every feature, or a random subset of k of them (used by the forest).
             feats = (np.arange(n_features) if k >= n_features
                      else rng.choice(n_features, size=k, replace=False))
             best = self._best_split(Xb, node_idx, y_enc, feats, C, imp, m)
             if best is None:
                 continue
             f, b, gain = best
-            if gain <= self.min_impurity_decrease:
+            if gain <= self.min_impurity_decrease:  # the split must reduce impurity
                 continue
 
+            # Split the rows: bin <= b goes left, which is the same as value < threshold.
             go_left = Xb[node_idx, f] <= b
             li = node_idx[go_left]
             ri = node_idx[~go_left]
@@ -207,6 +226,8 @@ class DecisionTreeClassifier:
             feature[nid] = int(f)
             threshold[nid] = np.float32(edges[f][b])
             split_bin[nid] = int(b)
+            # Turn the leaf into a split node and queue both children; the right child's
+            # class counts are the parent's minus the left child's.
             lc = np.bincount(y_enc[li], minlength=C).astype(np.float64)
             stack.append((ri, depth + 1, nid, False, counts - lc))
             stack.append((li, depth + 1, nid, True, lc))
@@ -226,10 +247,15 @@ class DecisionTreeClassifier:
         return self
 
     def _best_split(self, Xb, node_idx, y_enc, feats, C, parent_imp, m):
-        """Exact best split over the bin grid for the given feature subset."""
+        """Best split among the bin edges of the given features: (feature, bin, impurity decrease).
+
+        Returns None if no split is possible.
+        """
         k = int(feats.size)
+        # Rows are processed in chunks so memory stays bounded on large nodes.
         step = max(1, int(2_000_000 // max(k, 1)))
 
+        # Highest bin used by these rows; splits beyond it would put every row on one side.
         hi = 0
         for s in range(0, m, step):
             chunk = Xb[np.ix_(node_idx[s:s + step], feats)]
@@ -239,6 +265,9 @@ class DecisionTreeClassifier:
         if Beff < 2:
             return None
 
+        # counts[f, b, c] = number of rows of class c whose feature f falls in bin b.
+        # Each (feature, bin, class) triple gets one index in a flat array, so a single
+        # bincount fills the whole table.
         counts = np.zeros(k * Beff * C, dtype=np.float64)
         base = (np.arange(k, dtype=np.int64) * Beff)[None, :]
         for s in range(0, m, step):
@@ -248,16 +277,20 @@ class DecisionTreeClassifier:
             counts += np.bincount(flat, minlength=k * Beff * C)
         counts = counts.reshape(k, Beff, C)
 
+        # For a split after bin b, the left child gets bins 0..b: a running total over the
+        # bins gives the left class counts for every possible split at once.
         cum = counts.cumsum(axis=1)[:, :-1, :]            # left counts
         nl = cum.sum(axis=-1)
         nr = m - nl
         cr = counts.sum(axis=1)[:, None, :] - cum         # right counts
         il = impurity_from_counts(cum, self.criterion)
         ir = impurity_from_counts(cr, self.criterion)
+        # Impurity decrease = parent impurity - size-weighted impurity of the two children.
         weighted = (nl * il + nr * ir) / m
         valid = (nl >= self.min_samples_leaf) & (nr >= self.min_samples_leaf)
         gains = np.where(valid, parent_imp - weighted, -np.inf)
 
+        # The best (feature, bin) pair; divmod turns the flat position back into the pair.
         pos = int(gains.argmax())
         gain = float(gains.flat[pos])
         if not np.isfinite(gain):
@@ -268,12 +301,17 @@ class DecisionTreeClassifier:
     # ------------------------------------------------------------- prediction
 
     def apply(self, X):
+        """Index of the leaf each sample ends up in.
+
+        All samples move down the tree together, one level per loop, until every
+        sample has reached a leaf.
+        """
         X = np.asarray(X, dtype=np.float32)
         cur = np.zeros(X.shape[0], dtype=np.int64)
         feat, thr = self.feature_, self.threshold_
         lf, rt = self.left_, self.right_
         while True:
-            act = np.flatnonzero(feat[cur] >= 0)
+            act = np.flatnonzero(feat[cur] >= 0)  # samples still at a split node
             if act.size == 0:
                 break
             nodes = cur[act]
@@ -282,12 +320,15 @@ class DecisionTreeClassifier:
         return cur
 
     def predict_encoded(self, X):
+        """Predicted class as an internal index 0..C-1 (the majority class of each leaf)."""
         return self.value_[self.apply(X)]
 
     def predict(self, X):
+        """Predicted class label for each sample."""
         return self.classes_[self.predict_encoded(X)]
 
     def predict_proba(self, X):
+        """Class probabilities for each sample: the class shares of the training rows in its leaf."""
         leaves = self.apply(X)
         if self.proba_ is None:
             out = np.zeros((X.shape[0], self.n_classes_), dtype=np.float32)
@@ -299,17 +340,21 @@ class DecisionTreeClassifier:
 
     @property
     def n_nodes_(self):
+        """Total number of nodes in the tree."""
         return int(self.feature_.size)
 
     @property
     def n_leaves_(self):
+        """Number of leaves (nodes with no split)."""
         return int((self.feature_ < 0).sum())
 
     @property
     def depth_(self):
+        """Depth actually reached by the tree."""
         return int(self.node_depth_.max())
 
     def describe(self):
+        """Size and settings of the fitted tree, for reports."""
         return {"n_nodes": self.n_nodes_, "n_leaves": self.n_leaves_,
                 "depth": self.depth_, "criterion": self.criterion,
                 "max_depth": self.max_depth,
