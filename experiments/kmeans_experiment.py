@@ -24,7 +24,7 @@ from utils.results import append_csv, clear_results, save_run
 
 ALGORITHM = "kmeans"
 DATASET = "sentiment"
-K_VALUES = [3, 6, 9]
+K_VALUES = list(range(1, 26, 2))  # k = 1, 3, 5, ..., 25
 SEED = 42
 CLASS_NAMES = ["negative", "neutral", "positive"]
 

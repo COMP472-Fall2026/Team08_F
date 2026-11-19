@@ -39,7 +39,7 @@ python submission.py                              # apply the final model: Kaggl
 | **Models** (`models/`) | Each algorithm as a class with `fit` and `predict` |
 | `models/knn.py` | k-nearest neighbours, from scratch in NumPy: Euclidean or cosine distance, majority or distance-weighted vote |
 | `models/decision_tree.py` | CART decision tree, from scratch in NumPy: Gini, entropy or misclassification criterion; histogram-based split search |
-| `models/random_forest.py` | Random forest built on `decision_tree.py`: bootstrap samples, random features per split, vote over the trees, out-of-bag accuracy |
+| `models/random_forest.py` | Random forest built on `models/decision_tree.py`: bootstrap samples, random features per split, vote over the trees, out-of-bag accuracy |
 | `models/neural_network.py` | Feed-forward neural network in PyTorch, its input preprocessing (`InputPipeline`, word dropout), training loop and prediction |
 | `models/kmeans.py` | k-means clustering, from scratch in NumPy |
 | **Experiments** (`experiments/`) | Scripts that train and evaluate the models |
@@ -206,7 +206,7 @@ runs for a fixed number of epochs. `--help` lists every option.
 python experiments/kmeans_experiment.py
 ```
 
-Clusters all sentiment training data (features only) with k = 3, 6 and 9, then uses the
+Clusters all sentiment training data (features only) with k = 1, 3, 5, ..., 25, then uses the
 true labels to evaluate the clusters: purity (share of examples in their cluster's most
 common class), WCSS (within-cluster sum of squared distances) and the class mix of each
 cluster.

@@ -1,6 +1,6 @@
 """Feed-forward neural network: the model, its input preprocessing, training and prediction.
 
-Used by experiments/train_neural_network.py (validation experiments) and
+Used by experiments/neural_network_experiment.py (validation experiments) and
 submission.py (final Kaggle predictions).
 """
 
