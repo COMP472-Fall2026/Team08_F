@@ -2,249 +2,274 @@
 
 Concordia University | Fall 2026
 
-## Overview
-
-This project implements and compares machine learning algorithms on two
-independent classification tasks, using pre-extracted numerical feature vectors:
+This project implements and compares machine learning algorithms on two independent
+classification tasks, using pre-extracted numerical feature vectors:
 
 | Task | Features | Classes | Labeled examples | Test examples |
 | --- | ---: | ---: | ---: | ---: |
 | Visual object recognition | 500 | 50 (labels 0–49) | 20,000 | 5,000 |
 | Sentiment analysis (frozen BERT embeddings) | 768 | 3 (0 = negative, 1 = neutral, 2 = positive) | 12,000 | 5,000 |
 
-Algorithms: k-Nearest Neighbours, Decision Tree, Random Forest, a feed-forward
-Neural Network, and k-Means clustering. A separate model is trained for each task.
-
-## Team responsibilities
+Algorithms: k-nearest neighbours (k-NN), decision tree, random forest, a feed-forward
+neural network, and k-means clustering. A separate model is trained for each task.
 
 | Member | Responsibilities |
 | --- | --- |
 | Member 1 | k-NN, clustering, data preprocessing |
-| Member 2 | Decision Tree, Random Forest |
-| Member 3 | Neural Network, evaluation, Kaggle submission |
+| Member 2 | Decision tree, random forest |
+| Member 3 | Neural network, evaluation, Kaggle submission |
 
-## Setup
+**Quick start** (from the repository root, after the setup below):
 
-1. **Python:** tested with Python 3.14.7. Exact library versions are in `requirements.txt`.
-2. **Install the dependencies** from the repository root:
+```bash
+python experiments/knn_experiment.py              # train + evaluate k-NN
+python experiments/tree_experiment.py --sweep final   # train + evaluate the final random forests (see note in section 4)
+python experiments/neural_network_experiment.py   # train + evaluate the neural network
+python experiments/kmeans_experiment.py           # k-means clustering
+python experiments/analysis.py                    # figures and tables for all of the above
+python submission.py                              # apply the final model: Kaggle submission
+```
+
+---
+
+## 1. Repository contents
+
+| File | Purpose |
+| --- | --- |
+| **Models** (`models/`) | Each algorithm as a class with `fit` and `predict` |
+| `models/knn.py` | k-nearest neighbours, from scratch in NumPy: Euclidean or cosine distance, majority or distance-weighted vote |
+| `models/decision_tree.py` | CART decision tree, from scratch in NumPy: Gini, entropy or misclassification criterion; histogram-based split search |
+| `models/random_forest.py` | Random forest built on `decision_tree.py`: bootstrap samples, random features per split, vote over the trees, out-of-bag accuracy |
+| `models/neural_network.py` | Feed-forward neural network in PyTorch, its input preprocessing (`InputPipeline`, word dropout), training loop and prediction |
+| `models/kmeans.py` | k-means clustering, from scratch in NumPy |
+| **Experiments** (`experiments/`) | Scripts that train and evaluate the models |
+| `experiments/knn_experiment.py` | Trains and evaluates k-NN for every combination of k, distance, scaling and voting |
+| `experiments/tree_experiment.py` | Trains and evaluates decision trees and random forests: depth, leaf size, criterion, bins, number of trees, features per split, tree vs forest, final forest |
+| `experiments/neural_network_experiment.py` | Trains and evaluates the neural network: one setting changed at a time, seed repeats, final 3-network model |
+| `experiments/kmeans_experiment.py` | Runs k-means on the sentiment data and compares the clusters with the true classes |
+| `experiments/analysis.py` | Makes every figure and table from the saved results (no retraining), and compares the classifiers |
+| **Shared code** (`utils/`) | Used by every algorithm |
+| `utils/__init__.py` | Marks `utils` as a Python package |
+| `utils/data_loader.py` | Loads a Kaggle CSV and checks it (columns, feature order, row count, IDs); returns features, labels and IDs |
+| `utils/preprocessing.py` | The shared 80/20 train/validation split, standardization, and recovery of image word counts |
+| `utils/metrics.py` | Accuracy, confusion matrix, per-class precision/recall/F1 |
+| `utils/results.py` | Saves every run's settings, accuracy and validation predictions in the same CSV format |
+| **Tests** (`tests/`) | Unit tests on small made-up data (no Kaggle files needed) |
+| `tests/test_data_pipeline.py` | Data loading, the shared split, standardization, count recovery |
+| `tests/test_neural_network.py` | Network, word dropout, training, experiment records, submission checks |
+| `tests/test_tree_models.py` | Decision tree and random forest correctness and reproducibility, binning |
+| `tests/test_results_and_analysis.py` | The shared results format and the analysis script |
+| **Other** | |
+| `submission.py` | Applies the final model (neural network) to the test data and writes the Kaggle submission |
+| `requirements.txt` | Python packages, with the versions the project was tested with |
+| `.gitignore` | Keeps data, results, submissions and caches out of Git |
+| `data/` | The five Kaggle CSVs (downloaded; not in Git) |
+| `results/` | Created by the experiment and analysis scripts (not in Git) |
+| `submissions/` | Created by `submission.py` (not in Git) |
+
+## 2. Setup
+
+1. **Python 3.10 or newer** (tested with 3.14.7).
+2. **Install the packages** from the repository root:
    ```bash
    pip install -r requirements.txt
    ```
 3. **Download the data** from the
    [COMP 472 Kaggle competition](https://www.kaggle.com/competitions/comp-472-project-fall-2026-concordia/data)
-   and place these five files in `data/`:
+   and put these five files in `data/`:
    ```text
    data/image_train.csv      data/image_test.csv
    data/sentiment_train.csv  data/sentiment_test.csv
    data/sample_submission.csv
    ```
-4. **Check the installation** (no data needed, takes a few seconds):
+4. **Check that everything works** (a few seconds; no data needed):
    ```bash
    python -m unittest discover -s tests -v
    ```
 
 Run every command from the repository root. A GPU is not required.
 
-## Project structure
+## 3. Data preprocessing
 
-```text
-COMP472-Project-Fall2026/
-├── models/
-│   ├── decision_tree.py          # From-scratch CART decision tree (NumPy only)
-│   ├── neural_network.py         # Network, input preprocessing, training loop, prediction
-│   └── random_forest.py          # From-scratch random forest, built on decision_tree.py
-├── utils/
-│   ├── data_loader.py            # Load and validate the Kaggle CSVs
-│   ├── metrics.py                # Accuracy, confusion matrix, per-class report
-│   └── preprocessing.py          # Shared 80/20 split, standardization, word-count recovery
-├── experiments/
-│   ├── train_neural_network.py   # Neural network experiments; results saved to CSV
-│   ├── tree_experiment.py        # Decision tree and forest sweeps; results saved to CSV
-│   └── tree_submission.py        # Final forests refitted on all labeled data
-├── tests/
-│   ├── test_data_pipeline.py     # Data loading, split and preprocessing tests
-│   ├── test_neural_network.py    # Network, training, experiment and submission tests
-│   └── test_tree_models.py       # Tree and forest correctness, determinism, binning tests
-├── submission.py                 # Train the final models and write the Kaggle submission
-├── requirements.txt              # Python dependencies and tested versions
-├── data/                         # Kaggle CSVs (downloaded, not tracked)
-├── results/                      # Experiment results (generated, not tracked)
-└── submissions/                  # Kaggle submission files (generated, not tracked)
-```
+**Preprocessing runs automatically as the first step of every experiment script and of
+`submission.py`**, so there is no separate command to run before training. Each script:
 
-## Data pipeline (shared by all classifiers)
+1. **Loads and validates** each CSV with `load_dataset` (`utils/data_loader.py`): checks
+   the expected columns and row counts, puts the features in numeric order
+   (`feature_0`, `feature_1`, …), and separates them from the `id` and `label` columns,
+   which are never used as features.
+2. **Splits** the labeled data with `split_dataset` (`utils/preprocessing.py`): a
+   stratified 80% training / 20% validation split with seed 42. Every algorithm uses this
+   same split, so they are evaluated on the same examples.
+3. **Applies the algorithm's own preprocessing**, learned from the training split only
+   and then applied unchanged to the validation (and test) data, so no information leaks
+   from the evaluation data:
 
-- **Loading** (`utils/data_loader.py`): reads `{task}_{train|test}.csv`, checks the
-  expected columns and row counts, and returns features `X` (float32), labels `y`
-  and `ids`. The `id` column is never used as a feature, and `label` only as the target.
-- **Validation split** (`utils/preprocessing.py`): a stratified 80% train / 20%
-  validation split with seed 42, made separately for each task. Every classifier
-  uses this same split, so their results are directly comparable.
-- **No data leakage:** any learned preprocessing (such as standardization) is
-  fitted on the training subset only, then applied unchanged to validation and test data.
+| Algorithm | Preprocessing |
+| --- | --- |
+| k-NN | Both unscaled and standardized features are tested (each feature scaled to mean 0, standard deviation 1, using training statistics) |
+| Decision tree, random forest | No scaling (a tree's splits do not change when a feature is rescaled). Features are binned onto a grid computed from the training rows, to speed up the split search |
+| Neural network | Image: each row is turned back into integer visual-word counts (`recover_counts`), with word dropout during training. Sentiment: standardized |
+| k-means | None: clusters the raw sentiment features |
 
-```python
+To run the shared preprocessing steps on their own (for example, to check the data):
+
+```bash
+python -c "
 from utils.data_loader import load_dataset
 from utils.preprocessing import split_dataset, standardize_split
-
-data = load_dataset("image")               # or "sentiment"
-split = split_dataset(data)                # stratified 80/20 split, seed 42
-scaled, scaler = standardize_split(split)  # optional; fitted on training data only
-X_train, y_train = scaled.train.X, scaled.train.y
-X_val, y_val = scaled.validation.X, scaled.validation.y
-
-test = load_dataset("image", "test")       # hidden test set: features and IDs, no labels
-X_test = scaler.transform(test.X)
+for task in ('image', 'sentiment'):
+    split = split_dataset(load_dataset(task))      # steps 1 and 2
+    scaled, scaler = standardize_split(split)      # step 3: standardization, fitted on training only
+    print(task, 'train', split.train.X.shape, 'validation', split.validation.X.shape)
+"
 ```
 
-## Neural network
+## 4. Train and evaluate
 
-A feed-forward network written with PyTorch (`models/neural_network.py`):
-input layer → one or more fully connected hidden layers (each followed by an
-activation and dropout) → one output per class. It is trained with cross-entropy
-loss and mini-batches. The number and size of hidden layers, activation (ReLU or
-GELU), dropout, optimizer (Adam or AdamW), learning rate, learning-rate schedule,
-weight decay, batch size and number of epochs are all configurable.
+Every experiment script trains its models on the 80% training split and evaluates them
+on the 20% validation split. It runs everything for both datasets with no arguments, and
+saves the results to `results/<algorithm>/` (see [Results](#7-results-files)).
 
-### Final configuration
+### k-nearest neighbours
 
-| Setting | Image (500 → 50) | Sentiment (768 → 3) |
+```bash
+python experiments/knn_experiment.py
+```
+
+Tries every combination of k (1, 3, 5, 10, 20), distance (Euclidean, cosine), scaling
+(unscaled, standardized) and voting (majority, distance-weighted): 40 runs per dataset.
+
+### Decision tree and random forest
+
+**Recommended: run only the final forests** (a few minutes). This trains and evaluates the
+final random forest for each task, the result used to compare the classifiers:
+
+```bash
+python experiments/tree_experiment.py --sweep final
+```
+
+**Full run: every tree experiment in the report.** This takes a few hours on a laptop CPU,
+because it grows about 4,000 trees from scratch (mostly in the features-per-split sweep):
+
+```bash
+python experiments/tree_experiment.py
+```
+
+The full run contains single-tree sweeps of depth, minimum leaf size and criterion; forest sweeps of number of
+bins, number of trees and features per split; tree vs forest at matched depths; and the
+final forest for each task:
+
+| Final forest | Image | Sentiment |
+| --- | --- | --- |
+| Trees / criterion | 300 / Gini | 300 / Gini |
+| Maximum depth | unrestricted | 12 |
+| Features per split | 0.05 (25 of 500) | sqrt (27 of 768) |
+
+Other quick ways to check the tree code:
+
+| To check | Command |
+| --- | --- |
+| The tree and forest code is correct | `python -m unittest tests/test_tree_models.py` |
+| One experiment, e.g. tree depth (under- and overfitting) | `python experiments/tree_experiment.py --sweep depth` |
+| The whole pipeline, on 2,000 training rows | `python experiments/tree_experiment.py --subsample 2000` |
+
+`--dataset image` or `--dataset sentiment` limits any of these to one dataset.
+
+### Neural network
+
+```bash
+python experiments/neural_network_experiment.py                          # every experiment
+python experiments/neural_network_experiment.py --dataset image --ensemble       # only the final model
+python experiments/neural_network_experiment.py --dataset image --dropout 0.2    # one run, one setting changed
+```
+
+Changes one setting at a time from the final configuration (layer size, depth,
+activation, dropout, word dropout, learning rate, epochs, preprocessing), repeats the
+final configuration with two more seeds to measure seed-to-seed variation, and evaluates
+the final model: the average of three networks (seeds 42, 7 and 123). Training always
+runs for a fixed number of epochs. `--help` lists every option.
+
+| Final configuration | Image (500 → 50) | Sentiment (768 → 3) |
 | --- | --- | --- |
 | Hidden layers | 1 layer of 4096 neurons | 1 layer of 256 neurons |
 | Activation / dropout | GELU / 0.4 | GELU / 0.2 |
-| Input preprocessing | Visual-word counts, word dropout 0.4 | Standardized features |
-| Optimizer | AdamW, learning rate 0.001, weight decay 0.05 | AdamW, learning rate 0.0001, no weight decay |
-| Learning-rate schedule | One-cycle (warm-up, then cosine decay) | Constant |
+| Input preprocessing | visual-word counts, word dropout 0.4 | standardized |
+| Optimizer | AdamW, learning rate 0.001, weight decay 0.05 | AdamW, learning rate 0.0001 |
+| Learning-rate schedule | one-cycle (warm-up, then cosine decay) | constant |
 | Batch size / epochs | 128 / 40 | 64 / 15 |
-| Loss | Cross-entropy | Cross-entropy |
+| Loss | cross-entropy | cross-entropy |
 
-These defaults are defined in `DEFAULTS` in `experiments/train_neural_network.py`.
-
-### Preprocessing
-
-Preprocessing runs automatically inside training, so there is no separate step.
-It is fitted on the training data only.
-
-- **Image:** each feature row is a bag of visual-word counts scaled to length 1.
-  `recover_counts` divides each row by its smallest non-zero value to get the
-  integer counts back. During training, **word dropout** randomly removes each
-  counted word with the given probability, giving the network a slightly different
-  version of each image every epoch, which reduces overfitting. Each row is then
-  rescaled to length 1. Validation and test data are never altered.
-- **Sentiment:** each feature is standardized to mean 0 and standard deviation 1,
-  using statistics from the training data.
-
-### Train and evaluate
-
-`experiments/train_neural_network.py` trains on the 80% split and evaluates on the
-20% validation split. Training runs for a fixed number of epochs, and the model
-after the final epoch is evaluated; validation data never influences training.
+### k-means clustering
 
 ```bash
-# All experiments used in the report, for one task
-python -m experiments.train_neural_network --dataset image --all
-python -m experiments.train_neural_network --dataset sentiment --all
-
-# A single run with the final configuration
-python -m experiments.train_neural_network --dataset image
-
-# A single run with settings changed (see --help for every option)
-python -m experiments.train_neural_network --dataset image --hidden-sizes 512 256 --learning-rate 0.01
-
-# The final submitted model (average of 3 models with different seeds), on validation
-python -m experiments.train_neural_network --dataset image --ensemble
+python experiments/kmeans_experiment.py
 ```
 
-`--all` runs every experiment in `EXPERIMENTS` (each changes one setting from the
-final configuration), the final configuration again with two other seeds to measure
-seed-to-seed variation, and the final ensemble. It takes about 16 minutes for image
-and under a minute for sentiment on a laptop CPU.
+Clusters all sentiment training data (features only) with k = 3, 6 and 9, then uses the
+true labels to evaluate the clusters: purity (share of examples in their cluster's most
+common class), WCSS (within-cluster sum of squared distances) and the class mix of each
+cluster.
 
-### Results
-
-Every run adds rows to three CSV files in `results/neural_network/`, linked by `run_id`:
-
-| File | One row per | Contents |
-| --- | --- | --- |
-| `experiments.csv` | run | Experiment name, every setting, seed(s), final train and validation accuracy and loss, training time, parameter count |
-| `history.csv` | run, seed and epoch | Train and validation accuracy and loss after each epoch (learning curves) |
-| `validation_predictions.csv` | run and validation example | Example ID, true label, predicted label (confusion matrices, per-class metrics, error analysis) |
-
-For an ensemble, accuracy, loss and predictions come from the averaged class
-probabilities, and `history.csv` holds the curves of each model in it.
-
-### Apply the model (Kaggle submission)
+## 5. Analysis: figures and tables
 
 ```bash
-python submission.py              # 3-model ensemble per task (seeds 42, 7, 123)
-python submission.py --seeds 42   # a single model per task
+python experiments/analysis.py                    # all algorithms
+python experiments/analysis.py --algorithm knn    # one algorithm
+```
+
+Reads the saved results (no retraining) and writes to `results/<algorithm>/figures/`:
+accuracy against each setting that was varied, the confusion matrix and per-class
+precision/recall/F1 of the best run, learning curves (neural network) and cluster
+composition charts (k-means). `results/comparison/` gets the validation accuracy of each
+classifier's final model and how often their mistakes overlap.
+
+## 6. Apply the model: Kaggle submission
+
+The neural network is the final model, as it has the best validation accuracy on both
+tasks.
+
+```bash
+python submission.py
 ```
 
 For each task, this retrains the final configuration on all labeled data (preprocessing
-is refitted on that data), predicts the hidden test set, and averages the models' class
-probabilities. Predictions are matched to `data/sample_submission.csv` by ID and checked
-(every ID exactly once, labels in range), then written to `submissions/submission.csv`
-(`id,label`). The settings used are saved to `submissions/submission_config.json`.
+is refitted on that data), trains three networks (seeds 42, 7 and 123), averages their
+predicted class probabilities on the test data, matches the predictions to
+`data/sample_submission.csv` by ID, checks them (every ID exactly once, labels in range)
+and writes `submissions/submission.csv` (`id,label`).
 
-## Decision tree and random forest
+The other models are applied the same way in Python, with `fit` then `predict`, for example:
 
-Both are written from scratch in NumPy, with no scikit-learn classifiers:
-`models/decision_tree.py` (CART, binary splits, Gini / entropy / misclassification
-criteria, histogram split search) and `models/random_forest.py`, which imports the tree
-rather than reimplementing it and adds bootstrap sampling, per-node feature
-subsampling, a soft vote over class probabilities, out-of-bag scoring and
-parallel fitting. Each tree's seed is drawn up front, so a parallel fit and a
-serial fit with the same seed give identical predictions; `tests/test_tree_models.py`
-asserts this.
+```python
+from models.knn import KNNClassifier
+from utils.data_loader import load_dataset
 
-### No scaling, by design
-
-Trees split on tests of the form `feature <= threshold`, so any strictly monotone
-rescaling maps every candidate threshold onto a corresponding one and leaves the
-fitted tree unchanged. `standardize_split` is therefore deliberately not used here,
-unlike in the k-NN and neural network sections. The one transform applied is
-histogram binning onto a quantile grid computed on training rows only (no
-leakage), which makes the split search O(bins) per feature instead of O(distinct
-values). The image features are 85% zeros, so a naive quantile grid collapses
-onto the zero mass; the binner gives a dominant repeated value its own bin and
-spreads the remaining edges over the non-zero values.
-
-### Final configuration
-
-| Setting | Image (500 → 50) | Sentiment (768 → 3) |
-| --- | --- | --- |
-| Model | Random forest, 300 trees | Random forest, 300 trees |
-| Criterion | Gini | Gini |
-| Maximum depth | Unrestricted | 12 |
-| Minimum leaf size | 1 | 1 |
-| Features per split | 0.05 (25 of 500) | sqrt (27 of 768) |
-| Histogram bins | 64 | 64 |
-
-The two tasks genuinely disagree: the sentiment forest peaks at depth 12 and
-falls beyond it, while the image forest improves all the way to unrestricted
-depth. These settings are in `FINAL_SETTINGS` in `experiments/tree_submission.py`.
-
-### Run the experiments
-
-```bash
-python experiments/tree_experiment.py                       # every sweep, both tasks
-python experiments/tree_experiment.py --task image --sweep depth
-python experiments/tree_experiment.py --subsample 2000      # quick smoke run
-python experiments/tree_submission.py                       # holdout check, then refit on 100%
+train, test = load_dataset("sentiment"), load_dataset("sentiment", "test")
+model = KNNClassifier(k=20, distance="euclidean")
+model.fit(train.X, train.y)
+predictions = model.predict(test.X)
 ```
 
-Each sweep writes `results/<task>_<sweep>.csv`: `depth`, `leaf`, `criterion`, `bins`,
-`trees`, `features` and `overfit` (tree against forest at matched depth). All of them
-use `split_dataset` with seed 42, so the numbers are comparable with the other
-classifiers. `tree_submission.py` reuses `submission.make_submission` to assemble and
-validate its output.
+## 7. Results files
 
-## Reproducibility
+Each experiment script saves to `results/<algorithm>/` (`knn`, `trees`, `neural_network`,
+`kmeans`) through `utils/results.py`. A full run starts from empty files.
 
-- **Seeds:** the validation split always uses seed 42. Each training run's seed is
-  recorded in `experiments.csv`; the final ensemble uses seeds 42, 7 and 123.
+| File | One row per | Contents |
+| --- | --- | --- |
+| `experiments.csv` | run | dataset, sweep (which setting was varied), experiment name, every setting, validation (and train) accuracy, time |
+| `validation_predictions.csv` | run and validation example | example ID, true label, predicted label |
+| `history.csv` (neural network) | run, seed and epoch | train and validation accuracy and loss after each epoch |
+| `cluster_composition.csv` (k-means) | k and cluster | number of examples of each class in each cluster |
+
+## 8. Reproducibility
+
+- **Seeds:** the train/validation split always uses seed 42. Training randomness uses
+  fixed seeds (neural network 42, plus 7 and 123 for the final model; forests 0;
+  k-means 42), recorded in `experiments.csv`.
 - **Settings:** every setting of every run is recorded in `experiments.csv`.
-- **Versions:** Python and library versions are listed in `requirements.txt`.
+- **Versions:** Python and package versions are listed in `requirements.txt`.
 
-Results should match closely when rerun, though not necessarily bit for bit,
-since PyTorch results can vary slightly between machines.
+Results should match closely when rerun, though not necessarily bit for bit, since
+PyTorch and parallel tree training can vary slightly between machines.
